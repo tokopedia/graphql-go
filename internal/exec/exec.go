@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	errlib "errors"
+	"fmt"
 	"reflect"
 	"sync"
 
@@ -41,7 +42,14 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.O
 	func() {
 		defer r.handlePanic(ctx)
 		sels := selected.ApplyOperation(&r.Request, s, op)
-		r.execSelections(ctx, sels, nil, s.Resolver, &out, op.Type == query.Mutation)
+		if op.Type == query.Mutation {
+			r.execSelections(ctx, sels, nil, s.Resolver, &out, true, query.FixedResponseMutation)
+		} else if op.Type == query.Query {
+			r.execSelections(ctx, sels, nil, s.Resolver, &out, false, query.FixedResponseQuery)
+		} else {
+			panic(fmt.Sprintf("operation %s not supported", op.Type))
+		}
+
 	}()
 
 	if err := ctx.Err(); err != nil {
@@ -58,7 +66,7 @@ type fieldToExec struct {
 	out      *bytes.Buffer
 }
 
-func (r *Request) execSelections(ctx context.Context, sels []selected.Selection, path *pathSegment, resolver reflect.Value, out *bytes.Buffer, serially bool) {
+func (r *Request) execSelections(ctx context.Context, sels []selected.Selection, path *pathSegment, resolver reflect.Value, out *bytes.Buffer, serially bool, fixedRes map[string]interface{}) {
 	async := !serially && selected.HasAsyncSel(sels)
 
 	var fields []*fieldToExec
@@ -72,7 +80,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 				defer wg.Done()
 				defer r.handlePanic(ctx)
 				f.out = new(bytes.Buffer)
-				execFieldSelection(ctx, r, f, &pathSegment{path, f.field.Alias}, true)
+				execFieldSelection(ctx, r, f, &pathSegment{path, f.field.Alias}, true, fixedRes)
 			}(f)
 		}
 		wg.Wait()
@@ -92,7 +100,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 			continue
 		}
 		f.out = out
-		execFieldSelection(ctx, r, f, &pathSegment{path, f.field.Alias}, false)
+		execFieldSelection(ctx, r, f, &pathSegment{path, f.field.Alias}, false, fixedRes)
 	}
 	out.WriteByte('}')
 }
@@ -134,6 +142,7 @@ func typeOf(tf *selected.TypenameField, resolver reflect.Value) string {
 	if len(tf.TypeAssertions) == 0 {
 		return tf.Name
 	}
+
 	for name, a := range tf.TypeAssertions {
 		out := resolver.Method(a.MethodIndex).Call(nil)
 		if out[1].Bool() {
@@ -143,7 +152,7 @@ func typeOf(tf *selected.TypenameField, resolver reflect.Value) string {
 	return ""
 }
 
-func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *pathSegment, applyLimiter bool) {
+func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *pathSegment, applyLimiter bool, fixedRes map[string]interface{}) {
 	if applyLimiter {
 		r.Limiter <- struct{}{}
 	}
@@ -165,8 +174,21 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 			}
 		}()
 
+		if temp, ok := fixedRes[f.field.Name]; ok {
+			if v, ok := temp.(map[string]interface{}); ok {
+				fixedRes = v
+			} else {
+				result = reflect.ValueOf(temp)
+			}
+			return nil
+		}
+
 		if f.field.FixedResult.IsValid() {
 			result = f.field.FixedResult
+			return nil
+		}
+
+		if !f.resolver.IsValid() {
 			return nil
 		}
 
@@ -181,6 +203,7 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 		if f.field.ArgsPacker != nil {
 			in = append(in, f.field.PackedArgs)
 		}
+
 		callOut := f.resolver.Method(f.field.MethodIndex).Call(in)
 		result = callOut[0]
 		if f.field.HasError && !callOut[1].IsNil() {
@@ -210,28 +233,33 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 		f.out.WriteString("null") // TODO handle non-nil
 		return
 	}
-
-	r.execSelectionSet(traceCtx, f.sels, f.field.Type, path, result, f.out)
+	r.execSelectionSet(traceCtx, f.sels, f.field.Type, path, result, f.out, fixedRes)
 }
 
-func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selection, typ common.Type, path *pathSegment, resolver reflect.Value, out *bytes.Buffer) {
+func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selection, typ common.Type, path *pathSegment, resolver reflect.Value, out *bytes.Buffer, fixedRes map[string]interface{}) {
 	t, nonNull := unwrapNonNull(typ)
 	switch t := t.(type) {
 	case *schema.Object, *schema.Interface, *schema.Union:
-		if resolver.Kind() == reflect.Ptr && resolver.IsNil() {
+		if resolver.IsValid() && resolver.Kind() == reflect.Ptr && resolver.IsNil() {
 			if nonNull {
 				panic(errors.Errorf("got nil for non-null %q", t))
 			}
 			out.WriteString("null")
 			return
 		}
-
-		r.execSelections(ctx, sels, path, resolver, out, false)
+		if resolver.IsValid() {
+			//checking for fixedValue object
+			if v, ok := resolver.Interface().(map[string]interface{}); ok {
+				r.execSelections(ctx, sels, path, resolver, out, false, v)
+				return
+			}
+		}
+		r.execSelections(ctx, sels, path, resolver, out, false, fixedRes)
 		return
 	}
 
 	if !nonNull {
-		if resolver.IsNil() {
+		if !resolver.IsValid() || resolver.IsNil() {
 			out.WriteString("null")
 			return
 		}
@@ -240,6 +268,12 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 
 	switch t := t.(type) {
 	case *common.List:
+		if !resolver.IsValid() {
+			out.WriteByte('[')
+			out.WriteByte(']')
+			return
+		}
+
 		l := resolver.Len()
 
 		if selected.HasAsyncSel(sels) {
@@ -250,7 +284,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 				go func(i int) {
 					defer wg.Done()
 					defer r.handlePanic(ctx)
-					r.execSelectionSet(ctx, sels, t.OfType, &pathSegment{path, i}, resolver.Index(i), &entryouts[i])
+					r.execSelectionSet(ctx, sels, t.OfType, &pathSegment{path, i}, resolver.Index(i), &entryouts[i], fixedRes)
 				}(i)
 			}
 			wg.Wait()
@@ -271,12 +305,30 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 			if i > 0 {
 				out.WriteByte(',')
 			}
-			r.execSelectionSet(ctx, sels, t.OfType, &pathSegment{path, i}, resolver.Index(i), out)
+			r.execSelectionSet(ctx, sels, t.OfType, &pathSegment{path, i}, resolver.Index(i), out, fixedRes)
 		}
 		out.WriteByte(']')
 
 	case *schema.Scalar:
-		v := resolver.Interface()
+		var v interface{}
+		var ok bool
+		if v, ok = fixedRes[t.Name]; !ok {
+			if resolver.IsValid() {
+				v = resolver.Interface()
+			} else {
+				switch t.Name {
+				case "Boolean":
+					v = false
+				case "Int":
+					v = 0
+				case "Float":
+					v = 0.0
+				default:
+					v = "" //"String", "ID"
+				}
+			}
+		}
+
 		data, err := json.Marshal(v)
 		if err != nil {
 			panic(errors.Errorf("could not marshal %v: %s", v, err))
