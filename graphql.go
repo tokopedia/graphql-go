@@ -150,6 +150,19 @@ func (s *Schema) Validate(queryString string) []*errors.QueryError {
 
 	return validation.Validate(s.schema, doc, nil, s.maxDepth)
 }
+func SetFixedResponse(m map[string]interface{}) {
+	if m != nil {
+		if t, ok := m["query"]; ok {
+			if v, ok := t.(map[string]interface{}); ok {
+				query.FixedResponseQuery = v
+			}
+		} else if t, ok := m["mutation"]; ok {
+			if v, ok := t.(map[string]interface{}); ok {
+				query.FixedResponseMutation = v
+			}
+		}
+	}
+}
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
 // without a resolver. If the context get cancelled, no further resolvers will be called and a

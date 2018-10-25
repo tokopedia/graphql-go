@@ -8,6 +8,9 @@ import (
 	"github.com/tokopedia/graphql-go/internal/common"
 )
 
+var FixedResponseQuery map[string]interface{}
+var FixedResponseMutation map[string]interface{}
+
 type Document struct {
 	Operations OperationList
 	Fragments  FragmentList
