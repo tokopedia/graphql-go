@@ -42,10 +42,12 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.O
 	func() {
 		defer r.handlePanic(ctx)
 		sels := selected.ApplyOperation(&r.Request, s, op)
+		//var for getting result from fixedResp, is being initialized with false value
+		var fromFixedResp bool
 		if op.Type == query.Mutation {
-			r.execSelections(ctx, sels, nil, s.Resolver, &out, true, query.FixedResponseMutation)
+			r.execSelections(ctx, sels, nil, s.Resolver, &out, true, query.FixedResponseMutation, &fromFixedResp)
 		} else if op.Type == query.Query {
-			r.execSelections(ctx, sels, nil, s.Resolver, &out, false, query.FixedResponseQuery)
+			r.execSelections(ctx, sels, nil, s.Resolver, &out, false, query.FixedResponseQuery, &fromFixedResp)
 		} else {
 			panic(fmt.Sprintf("operation %s not supported", op.Type))
 		}
@@ -66,11 +68,11 @@ type fieldToExec struct {
 	out      *bytes.Buffer
 }
 
-func (r *Request) execSelections(ctx context.Context, sels []selected.Selection, path *pathSegment, resolver reflect.Value, out *bytes.Buffer, serially bool, fixedRes map[string]interface{}) {
+func (r *Request) execSelections(ctx context.Context, sels []selected.Selection, path *pathSegment, resolver reflect.Value, out *bytes.Buffer, serially bool, fixedRes interface{}, fromFixedResp *bool) {
 	async := !serially && selected.HasAsyncSel(sels)
 
 	var fields []*fieldToExec
-	collectFieldsToResolve(sels, resolver, &fields, make(map[string]*fieldToExec))
+	collectFieldsToResolve(sels, resolver, &fields, make(map[string]*fieldToExec), fromFixedResp)
 
 	if async {
 		var wg sync.WaitGroup
@@ -80,7 +82,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 				defer wg.Done()
 				defer r.handlePanic(ctx)
 				f.out = new(bytes.Buffer)
-				execFieldSelection(ctx, r, f, &pathSegment{path, f.field.Alias}, true, fixedRes)
+				execFieldSelection(ctx, r, f, &pathSegment{path, f.field.Alias}, true, fixedRes, fromFixedResp)
 			}(f)
 		}
 		wg.Wait()
@@ -100,12 +102,12 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 			continue
 		}
 		f.out = out
-		execFieldSelection(ctx, r, f, &pathSegment{path, f.field.Alias}, false, fixedRes)
+		execFieldSelection(ctx, r, f, &pathSegment{path, f.field.Alias}, false, fixedRes, fromFixedResp)
 	}
 	out.WriteByte('}')
 }
 
-func collectFieldsToResolve(sels []selected.Selection, resolver reflect.Value, fields *[]*fieldToExec, fieldByAlias map[string]*fieldToExec) {
+func collectFieldsToResolve(sels []selected.Selection, resolver reflect.Value, fields *[]*fieldToExec, fieldByAlias map[string]*fieldToExec, fromFixedResp *bool) {
 	for _, sel := range sels {
 		switch sel := sel.(type) {
 		case *selected.SchemaField:
@@ -126,11 +128,15 @@ func collectFieldsToResolve(sels []selected.Selection, resolver reflect.Value, f
 			*fields = append(*fields, &fieldToExec{field: sf, resolver: resolver})
 
 		case *selected.TypeAssertion:
+			//TODO: may need to revisit again
+			if *fromFixedResp {
+				continue
+			}
 			out := resolver.Method(sel.MethodIndex).Call(nil)
 			if !out[1].Bool() {
 				continue
 			}
-			collectFieldsToResolve(sel.Sels, out[0], fields, fieldByAlias)
+			collectFieldsToResolve(sel.Sels, out[0], fields, fieldByAlias, fromFixedResp)
 
 		default:
 			panic("unreachable")
@@ -152,7 +158,7 @@ func typeOf(tf *selected.TypenameField, resolver reflect.Value) string {
 	return ""
 }
 
-func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *pathSegment, applyLimiter bool, fixedRes map[string]interface{}) {
+func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *pathSegment, applyLimiter bool, fixedRes interface{}, fromFixedResp *bool) {
 	if applyLimiter {
 		r.Limiter <- struct{}{}
 	}
@@ -174,13 +180,33 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 			}
 		}()
 
-		if temp, ok := fixedRes[f.field.Name]; ok {
-			if v, ok := temp.(map[string]interface{}); ok {
-				fixedRes = v
-			} else {
-				result = reflect.ValueOf(temp)
+		if *fromFixedResp {
+			//>=2 level depth
+			//if fixResp exist then use that, else just bypass and return the default values
+			if fixedRes != nil {
+				if respMap, ok := fixedRes.(map[string]interface{}); ok {
+					if item, ok := respMap[f.field.Name]; ok {
+						fixedRes = item
+						return nil
+					}
+				}
 			}
+			fixedRes = nil
 			return nil
+		}
+		if fixedRes != nil {
+			//this will be called only first time
+			if respMap, ok := fixedRes.(map[string]interface{}); ok {
+				if item, ok := respMap[f.field.Name]; ok {
+					fixedRes = item
+					*fromFixedResp = true
+					return nil
+				}
+			} else {
+				fixedRes = nil
+				//as fixedResp first time itself is not valid, bypassing from here to return the default responses
+				return nil
+			}
 		}
 
 		if f.field.FixedResult.IsValid() {
@@ -233,44 +259,79 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 		f.out.WriteString("null") // TODO handle non-nil
 		return
 	}
-	r.execSelectionSet(traceCtx, f.sels, f.field.Type, path, result, f.out, fixedRes)
+	r.execSelectionSet(traceCtx, f.sels, f.field.Type, path, result, f.out, fixedRes, fromFixedResp)
 }
 
-func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selection, typ common.Type, path *pathSegment, resolver reflect.Value, out *bytes.Buffer, fixedRes map[string]interface{}) {
+func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selection, typ common.Type, path *pathSegment, resolver reflect.Value, out *bytes.Buffer, fixedRes interface{}, fromFixedResp *bool) {
 	t, nonNull := unwrapNonNull(typ)
 	switch t := t.(type) {
 	case *schema.Object, *schema.Interface, *schema.Union:
-		if resolver.IsValid() && resolver.Kind() == reflect.Ptr && resolver.IsNil() {
+		if *fromFixedResp {
+			if fixedRes != nil {
+				if _, ok := fixedRes.(map[string]interface{}); !ok {
+					//TODO:print error for invalid input
+					if !nonNull {
+						out.WriteString("null")
+						return
+					} else {
+						//if nonNull and fixedResp is invalid then bypassing to return default responses
+						fixedRes = nil
+					}
+				}
+			}
+		} else if resolver.Kind() == reflect.Ptr && resolver.IsNil() {
 			if nonNull {
 				panic(errors.Errorf("got nil for non-null %q", t))
 			}
 			out.WriteString("null")
 			return
 		}
-		if resolver.IsValid() {
-			//checking for fixedValue object
-			if v, ok := resolver.Interface().(map[string]interface{}); ok {
-				r.execSelections(ctx, sels, path, resolver, out, false, v)
-				return
-			}
-		}
-		r.execSelections(ctx, sels, path, resolver, out, false, fixedRes)
+		r.execSelections(ctx, sels, path, resolver, out, false, fixedRes, fromFixedResp)
 		return
 	}
 
 	if !nonNull {
-		if !resolver.IsValid() || resolver.IsNil() {
-			out.WriteString("null")
-			return
+		if *fromFixedResp {
+			if fixedRes == nil {
+				out.WriteString("null")
+				return
+			}
+		} else {
+			if resolver.IsNil() {
+				out.WriteString("null")
+				return
+			}
+			if resolver.Kind() != reflect.Slice {
+				resolver = resolver.Elem()
+			}
 		}
-		resolver = resolver.Elem()
+
 	}
 
 	switch t := t.(type) {
 	case *common.List:
-		if !resolver.IsValid() {
+		if *fromFixedResp {
+			if fixedRes != nil {
+				if sliceResp, ok := fixedRes.([]interface{}); ok {
+					//setting resolver invalid, will happen for 1st time
+					var resolver reflect.Value
+
+					out.WriteByte('[')
+					for i := 0; i < len(sliceResp); i++ {
+						if i > 0 {
+							out.WriteByte(',')
+						}
+						r.execSelectionSet(ctx, sels, t.OfType, &pathSegment{path, i}, resolver, out, sliceResp[i], fromFixedResp)
+					}
+					out.WriteByte(']')
+					return
+				}
+			}
+			//as fixed resp values are invalid, just bypassing everything
+			fmt.Printf("[fixedResp:common.List]got invalid fixedResp %v for list\n", fixedRes)
 			out.WriteByte('[')
 			out.WriteByte(']')
+			fixedRes = nil
 			return
 		}
 
@@ -284,7 +345,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 				go func(i int) {
 					defer wg.Done()
 					defer r.handlePanic(ctx)
-					r.execSelectionSet(ctx, sels, t.OfType, &pathSegment{path, i}, resolver.Index(i), &entryouts[i], fixedRes)
+					r.execSelectionSet(ctx, sels, t.OfType, &pathSegment{path, i}, resolver.Index(i), &entryouts[i], fixedRes, fromFixedResp)
 				}(i)
 			}
 			wg.Wait()
@@ -305,16 +366,16 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 			if i > 0 {
 				out.WriteByte(',')
 			}
-			r.execSelectionSet(ctx, sels, t.OfType, &pathSegment{path, i}, resolver.Index(i), out, fixedRes)
+			r.execSelectionSet(ctx, sels, t.OfType, &pathSegment{path, i}, resolver.Index(i), out, fixedRes, fromFixedResp)
 		}
 		out.WriteByte(']')
 
 	case *schema.Scalar:
 		var v interface{}
-		var ok bool
-		if v, ok = fixedRes[t.Name]; !ok {
-			if resolver.IsValid() {
-				v = resolver.Interface()
+
+		if *fromFixedResp {
+			if fixedRes != nil {
+				v = fixedRes
 			} else {
 				switch t.Name {
 				case "Boolean":
@@ -327,6 +388,8 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 					v = "" //"String", "ID"
 				}
 			}
+		} else {
+			v = resolver.Interface()
 		}
 
 		data, err := json.Marshal(v)
