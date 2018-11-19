@@ -156,7 +156,8 @@ func SetFixedResponse(m map[string]interface{}) {
 			if v, ok := t.(map[string]interface{}); ok {
 				query.FixedResponseQuery = v
 			}
-		} else if t, ok := m["mutation"]; ok {
+		}
+		if t, ok := m["mutation"]; ok {
 			if v, ok := t.(map[string]interface{}); ok {
 				query.FixedResponseMutation = v
 			}
