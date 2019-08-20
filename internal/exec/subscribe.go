@@ -8,11 +8,11 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
-	"github.com/graph-gophers/graphql-go/internal/exec/selected"
-	"github.com/graph-gophers/graphql-go/internal/query"
+	"github.com/tokopedia/graphql-go/errors"
+	"github.com/tokopedia/graphql-go/internal/common"
+	"github.com/tokopedia/graphql-go/internal/exec/resolvable"
+	"github.com/tokopedia/graphql-go/internal/exec/selected"
+	"github.com/tokopedia/graphql-go/internal/query"
 )
 
 type Response struct {
@@ -24,13 +24,13 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 	var result reflect.Value
 	var f *fieldToExec
 	var err *errors.QueryError
+	var fromFixedResponse bool
 	func() {
 		defer r.handlePanic(ctx)
 
 		sels := selected.ApplyOperation(&r.Request, s, op)
 		var fields []*fieldToExec
-		collectFieldsToResolve(sels, s, s.Resolver, &fields, make(map[string]*fieldToExec))
-
+		collectFieldsToResolve(sels, s.Resolver, &fields, make(map[string]*fieldToExec), &fromFixedResponse)
 		// TODO: move this check into validation.Validate
 		if len(fields) != 1 {
 			err = errors.Errorf("%s", "can subscribe to at most one subscription at a time")
@@ -118,9 +118,12 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 					// resolve response
 					func() {
 						defer subR.handlePanic(subCtx)
-
+						var (
+							fixedRes      interface{}
+							fromFixedResp bool
+						)
 						var buf bytes.Buffer
-						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, s, resp, &buf)
+						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, resp, &buf, fixedRes, &fromFixedResp)
 
 						propagateChildError := false
 						if _, nonNullChild := f.field.Type.(*common.NonNull); nonNullChild && resolvedToNull(&buf) {

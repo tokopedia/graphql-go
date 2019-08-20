@@ -97,7 +97,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 	} else {
 		for _, f := range fields {
 			f.out = new(bytes.Buffer)
-			execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
+			execFieldSelection(ctx, r, f, &pathSegment{path, f.field.Alias}, true, fixedRes, fromFixedResp)
 		}
 	}
 
@@ -143,7 +143,7 @@ func collectFieldsToResolve(sels []selected.Selection, resolver reflect.Value, f
 
 		case *selected.TypenameField:
 			sf := &selected.SchemaField{
-				Field:       s.Meta.FieldTypename,
+				// Field:       resolvable.Meta,
 				Alias:       sel.Alias,
 				FixedResult: reflect.ValueOf(typeOf(sel, resolver)),
 			}
@@ -451,47 +451,6 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 	default:
 		panic("unreachable")
 	}
-}
-
-func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *common.List, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
-	l := resolver.Len()
-	entryouts := make([]bytes.Buffer, l)
-
-	if selected.HasAsyncSel(sels) {
-		var wg sync.WaitGroup
-		wg.Add(l)
-		for i := 0; i < l; i++ {
-			go func(i int) {
-				defer wg.Done()
-				defer r.handlePanic(ctx)
-				r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])
-			}(i)
-		}
-		wg.Wait()
-	} else {
-		for i := 0; i < l; i++ {
-			r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])
-		}
-	}
-
-	_, listOfNonNull := typ.OfType.(*common.NonNull)
-
-	out.WriteByte('[')
-	for i, entryout := range entryouts {
-		// If the list wraps a non-null type and one of the list elements
-		// resolves to null, then the entire list resolves to null.
-		if listOfNonNull && resolvedToNull(&entryout) {
-			out.Reset()
-			out.WriteString("null")
-			return
-		}
-
-		if i > 0 {
-			out.WriteByte(',')
-		}
-		out.Write(entryout.Bytes())
-	}
-	out.WriteByte(']')
 }
 
 func unwrapNonNull(t common.Type) (common.Type, bool) {
