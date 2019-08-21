@@ -8,6 +8,9 @@ import (
 	"github.com/tokopedia/graphql-go/internal/common"
 )
 
+var FixedResponseQuery map[string]interface{}
+var FixedResponseMutation map[string]interface{}
+
 type Document struct {
 	Operations OperationList
 	Fragments  FragmentList
@@ -94,7 +97,7 @@ func (InlineFragment) isSelection() {}
 func (FragmentSpread) isSelection() {}
 
 func Parse(queryString string) (*Document, *errors.QueryError) {
-	l := common.NewLexer(queryString)
+	l := common.NewLexer(queryString, false)
 
 	var doc *Document
 	err := l.CatchSyntaxError(func() { doc = parseDocument(l) })
@@ -107,7 +110,7 @@ func Parse(queryString string) (*Document, *errors.QueryError) {
 
 func parseDocument(l *common.Lexer) *Document {
 	d := &Document{}
-	l.Consume()
+	l.ConsumeWhitespace()
 	for l.Peek() != scanner.EOF {
 		if l.Peek() == '{' {
 			op := &Operation{Type: Query, Loc: l.Location()}
