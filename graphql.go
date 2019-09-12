@@ -16,6 +16,7 @@ import (
 	"github.com/tokopedia/graphql-go/internal/validation"
 	"github.com/tokopedia/graphql-go/introspection"
 	"github.com/tokopedia/graphql-go/log"
+	golog "log"
 	"github.com/tokopedia/graphql-go/trace"
 )
 
@@ -136,6 +137,12 @@ func (s *Schema) Exec(ctx context.Context, queryString string, operationName str
 }
 
 func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) *Response {
+
+	var (
+		logFailedInputValidationQueries, anyOtherValidationError bool
+		errMessage                                               string
+	)
+
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return &Response{Errors: []*errors.QueryError{qErr}}
@@ -145,7 +152,20 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
 	if len(errs) != 0 {
-		return &Response{Errors: errs}
+		for _, err := range errs {
+			if err.Rule == "VariablesOfCorrectType" {
+				logFailedInputValidationQueries = true
+				errMessage = fmt.Sprintln(errMessage, "\n", err.Message)
+			} else if err.Rule != "" {
+				anyOtherValidationError = true
+			}
+		}
+		if anyOtherValidationError {
+			return &Response{Errors: errs}
+		}
+		if logFailedInputValidationQueries {
+			golog.Println("**************\n",errMessage, "\n", queryString, "\n**************")
+		}
 	}
 
 	op, err := getOperation(doc, operationName)
