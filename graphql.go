@@ -129,14 +129,14 @@ func (s *Schema) Validate(queryString string, variables map[string]interface{}) 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
 // without a resolver. If the context get cancelled, no further resolvers will be called and a
 // the context error will be returned as soon as possible (not immediately).
-func (s *Schema) Exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) *Response {
+func (s *Schema) Exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, logFailedInputValidationQMs bool) *Response {
 	if s.res == nil {
 		panic("schema created without resolver, can not exec")
 	}
-	return s.exec(ctx, queryString, operationName, variables, s.res)
+	return s.exec(ctx, queryString, operationName, variables, s.res, logFailedInputValidationQMs)
 }
 
-func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) *Response {
+func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema, logFailedInputValidationQMs bool) *Response {
 
 	var (
 		logFailedInputValidationQueries, anyOtherValidationError bool
@@ -163,7 +163,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		if anyOtherValidationError {
 			return &Response{Errors: errs}
 		}
-		if logFailedInputValidationQueries {
+		if logFailedInputValidationQueries && logFailedInputValidationQMs{
 			golog.Println("**************\n",errMessage, "\n", queryString, "\n**************")
 		}
 	}

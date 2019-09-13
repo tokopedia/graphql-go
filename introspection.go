@@ -18,7 +18,7 @@ func (s *Schema) ToJSON() ([]byte, error) {
 	result := s.exec(context.Background(), introspectionQuery, "", nil, &resolvable.Schema{
 		Query:  &resolvable.Object{},
 		Schema: *s.schema,
-	})
+	}, false)
 	if len(result.Errors) != 0 {
 		panic(result.Errors[0])
 	}
