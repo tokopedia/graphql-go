@@ -6,6 +6,8 @@ import (
 
 	"encoding/json"
 
+	golog "log"
+
 	"github.com/tokopedia/graphql-go/errors"
 	"github.com/tokopedia/graphql-go/internal/common"
 	"github.com/tokopedia/graphql-go/internal/exec"
@@ -16,7 +18,6 @@ import (
 	"github.com/tokopedia/graphql-go/internal/validation"
 	"github.com/tokopedia/graphql-go/introspection"
 	"github.com/tokopedia/graphql-go/log"
-	golog "log"
 	"github.com/tokopedia/graphql-go/trace"
 )
 
@@ -163,8 +164,12 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		if anyOtherValidationError {
 			return &Response{Errors: errs}
 		}
-		if logFailedInputValidationQueries && logFailedInputValidationQMs{
-			golog.Println("**************\n",errMessage, "\n", queryString, "\n**************")
+		if logFailedInputValidationQueries && logFailedInputValidationQMs {
+			variablesJson, err := json.MarshalIndent(variables, "", "\t")
+			if err != nil {
+				variablesJson = []byte{}
+			}
+			golog.Println("**************\n", errMessage, "\n", queryString, "\nVariables: ", string(variablesJson), "\n**************")
 		}
 	}
 
