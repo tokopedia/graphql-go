@@ -137,6 +137,12 @@ func (s *Schema) Exec(ctx context.Context, queryString string, operationName str
 	return s.exec(ctx, queryString, operationName, variables, s.res, logFailedInputValidationQMs)
 }
 
+type failedQueryLogTemplate struct {
+	Reason    string
+	Query     string
+	Variables string
+}
+
 func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema, logFailedInputValidationQMs bool) *Response {
 
 	var (
@@ -169,7 +175,16 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 			if err != nil {
 				variablesJson = []byte{}
 			}
-			golog.Println("**************\n", errMessage, "\n", queryString, "\nVariables: ", string(variablesJson), "\n**************")
+			msg := failedQueryLogTemplate{
+				Reason:    errMessage,
+				Query:     queryString,
+				Variables: string(variablesJson),
+			}
+			msgBytes, err := json.MarshalIndent(msg, "", "\t")
+			if err != nil {
+				msgBytes = []byte{}
+			}
+			golog.Println("Input Validation Failed\n", string(msgBytes), "\n")
 		}
 	}
 
