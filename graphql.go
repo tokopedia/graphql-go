@@ -6,6 +6,8 @@ import (
 
 	"encoding/json"
 
+	golog "log"
+
 	"github.com/tokopedia/graphql-go/errors"
 	"github.com/tokopedia/graphql-go/internal/common"
 	"github.com/tokopedia/graphql-go/internal/exec"
@@ -117,36 +119,73 @@ type Response struct {
 }
 
 // Validate validates the given query with the schema.
-func (s *Schema) Validate(queryString string) []*errors.QueryError {
+func (s *Schema) Validate(queryString string, variables map[string]interface{}) []*errors.QueryError {
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return []*errors.QueryError{qErr}
 	}
-
-	return validation.Validate(s.schema, doc, s.maxDepth)
+	return validation.Validate(s.schema, doc, variables, s.maxDepth)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
 // without a resolver. If the context get cancelled, no further resolvers will be called and a
 // the context error will be returned as soon as possible (not immediately).
-func (s *Schema) Exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) *Response {
+func (s *Schema) Exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, logFailedInputValidationQMs bool) *Response {
 	if s.res == nil {
 		panic("schema created without resolver, can not exec")
 	}
-	return s.exec(ctx, queryString, operationName, variables, s.res)
+	return s.exec(ctx, queryString, operationName, variables, s.res, logFailedInputValidationQMs)
 }
 
-func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) *Response {
+type failedQueryLogTemplate struct {
+	Reason    string
+	Query     string
+	Variables string
+}
+
+func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema, logFailedInputValidationQMs bool) *Response {
+
+	var (
+		logFailedInputValidationQueries, anyOtherValidationError bool
+		errMessage                                               string
+	)
+
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return &Response{Errors: []*errors.QueryError{qErr}}
 	}
 
 	validationFinish := s.validationTracer.TraceValidation()
-	errs := validation.Validate(s.schema, doc, s.maxDepth)
+	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
 	if len(errs) != 0 {
-		return &Response{Errors: errs}
+		for _, err := range errs {
+			if err.Rule == "VariablesOfCorrectType" {
+				logFailedInputValidationQueries = true
+				errMessage = fmt.Sprintln(errMessage, "\n", err.Message)
+			} else if err.Rule != "" {
+				anyOtherValidationError = true
+			}
+		}
+		if anyOtherValidationError {
+			return &Response{Errors: errs}
+		}
+		if logFailedInputValidationQueries && logFailedInputValidationQMs {
+			variablesJson, err := json.MarshalIndent(variables, "", "\t")
+			if err != nil {
+				variablesJson = []byte{}
+			}
+			msg := failedQueryLogTemplate{
+				Reason:    errMessage,
+				Query:     queryString,
+				Variables: string(variablesJson),
+			}
+			msgBytes, err := json.MarshalIndent(msg, "", "\t")
+			if err != nil {
+				msgBytes = []byte{}
+			}
+			golog.Println("Input Validation Failed\n", string(msgBytes), "\n")
+		}
 	}
 
 	op, err := getOperation(doc, operationName)
