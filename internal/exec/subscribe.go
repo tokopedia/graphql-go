@@ -25,7 +25,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 	var f *fieldToExec
 	var err *errors.QueryError
 	func() {
-		defer r.handlePanic(ctx, "")
+		defer r.handlePanic(ctx)
 
 		sels := selected.ApplyOperation(&r.Request, s, op)
 		var fields []*fieldToExec
@@ -117,7 +117,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 
 					// resolve response
 					func() {
-						defer subR.handlePanic(subCtx, "")
+						defer subR.handlePanic(subCtx)
 
 						var buf bytes.Buffer
 						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, s, resp, &buf)

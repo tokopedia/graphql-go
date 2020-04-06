@@ -65,7 +65,7 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 	}
 
 	if op.Type == query.Query || op.Type == query.Mutation {
-		data, errs := r.Execute(ctx, res, op, "")
+		data, errs := r.Execute(ctx, res, op)
 		return sendAndReturnClosed(&Response{Data: data, Errors: errs})
 	}
 

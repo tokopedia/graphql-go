@@ -223,8 +223,8 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		varTypes[v.Name.Name] = introspection.WrapType(t)
 	}
 	traceCtx, finish := s.tracer.TraceQuery(ctx, queryString, operationName, variables, varTypes)
-	queryInfo := fmt.Sprintf("Query: %s\nVariables: %+v\n\n", queryString, variables)
-	data, errs := r.Execute(traceCtx, res, op, queryInfo)
+	r.QInfo = fmt.Sprintf("Query: %s\nVariables: %+v\n", queryString, variables)
+	data, errs := r.Execute(traceCtx, res, op)
 	finish(errs)
 
 	return &Response{
