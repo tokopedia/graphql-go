@@ -26,10 +26,10 @@ type Request struct {
 	Logger  log.Logger
 }
 
-func (r *Request) handlePanic(ctx context.Context) {
+func (r *Request) handlePanic(ctx context.Context, queryString string) {
 	if value := recover(); value != nil {
 		r.Logger.LogPanic(ctx, value)
-		r.AddError(makePanicError(value))
+		r.AddError(makePanicError(value, queryString))
 	}
 }
 
@@ -37,14 +37,14 @@ type extensionser interface {
 	Extensions() map[string]interface{}
 }
 
-func makePanicError(value interface{}) *errors.QueryError {
-	return errors.Errorf("graphql: panic occurred: %v", value)
+func makePanicError(value interface{}, info string) *errors.QueryError {
+	return errors.Errorf("graphql: panic occurred: %v\n%s\n\n", value, info)
 }
 
-func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.Operation) ([]byte, []*errors.QueryError) {
+func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.Operation, queryInfo string) ([]byte, []*errors.QueryError) {
 	var out bytes.Buffer
 	func() {
-		defer r.handlePanic(ctx)
+		defer r.handlePanic(ctx, queryInfo)
 		sels := selected.ApplyOperation(&r.Request, s, op)
 		r.execSelections(ctx, sels, nil, s, s.Resolver, &out, op.Type == query.Mutation)
 	}()
@@ -79,7 +79,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 		for _, f := range fields {
 			go func(f *fieldToExec) {
 				defer wg.Done()
-				defer r.handlePanic(ctx)
+				defer r.handlePanic(ctx, "")
 				f.out = new(bytes.Buffer)
 				execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
 			}(f)
@@ -178,7 +178,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 		defer func() {
 			if panicValue := recover(); panicValue != nil {
 				r.Logger.LogPanic(ctx, panicValue)
-				err = makePanicError(panicValue)
+				err = makePanicError(panicValue, "")
 				err.Path = path.toSlice()
 			}
 		}()
@@ -337,7 +337,7 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 		for i := 0; i < l; i++ {
 			go func(i int) {
 				defer wg.Done()
-				defer r.handlePanic(ctx)
+				defer r.handlePanic(ctx, "")
 				r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])
 			}(i)
 		}
