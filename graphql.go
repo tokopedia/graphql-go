@@ -68,6 +68,7 @@ type Schema struct {
 	logger                log.Logger
 	useStringDescriptions bool
 	disableIntrospection  bool
+	isPanicLogEnabled     bool
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
@@ -148,6 +149,19 @@ func (s *Schema) Validate(queryString string, variables map[string]interface{}) 
 		return true, []*errors.QueryError{qErr}
 	}
 	return false, validation.Validate(s.schema, doc, variables, s.maxDepth)
+}
+
+//EnablePanicLogging enables query info logging if panic occurs
+func (s *Schema) EnablePanicLogging() {
+	s.isPanicLogEnabled = true
+	s.logger = getLogger(s)
+}
+
+func getLogger(s *Schema) log.Logger {
+	if s != nil && s.isPanicLogEnabled {
+		return &log.CustomLogger{true}
+	}
+	return &log.DefaultLogger{}
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
