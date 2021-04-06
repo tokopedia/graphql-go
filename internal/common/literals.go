@@ -25,6 +25,13 @@ func (lit *BasicLit) Value(vars map[string]interface{}) interface{} {
 	case scanner.Int:
 		value, err := strconv.ParseInt(lit.Text, 10, 32)
 		if err != nil {
+			if strings.Contains(err.Error(), strconv.ErrRange.Error()) {
+				val64, err := strconv.ParseInt(lit.Text, 10, 64)
+				if err != nil {
+					panic(err)
+				}
+				return int64(val64)
+			}
 			panic(err)
 		}
 		return int32(value)
