@@ -3,8 +3,8 @@ package graphql
 import (
 	"context"
 	"encoding/json"
-
 	"github.com/tokopedia/graphql-go/internal/exec/resolvable"
+
 	"github.com/tokopedia/graphql-go/introspection"
 )
 

@@ -1,4 +1,4 @@
-# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/tokopedia/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/tokopedia/graphql-go?badge) [![Build Status](https://semaphoreci.com/api/v1/graph-gophers/graphql-go/branches/master/badge.svg)](https://semaphoreci.com/graph-gophers/graphql-go) [![GoDoc](https://godoc.org/github.com/tokopedia/graphql-go?status.svg)](https://godoc.org/github.com/tokopedia/graphql-go)
+# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/graph-gophers/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/graph-gophers/graphql-go?badge) [![Build Status](https://graph-gophers.semaphoreci.com/badges/graphql-go/branches/master.svg?style=shields)](https://graph-gophers.semaphoreci.com/projects/graphql-go) [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
 
 <p align="center"><img src="docs/img/logo.png" width="300"></p>
 
@@ -21,13 +21,14 @@ safe for production use.
 
 ## Roadmap
 
-We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/tokopedia/graphql-go/projects/1).
+We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/graph-gophers/graphql-go/projects/1).
 Feedback is welcome and appreciated.
 
 ## (Some) Documentation
 
-### Basic Sample
+### Getting started
 
+In order to run a simple GraphQL server locally create a `main.go` file with the following content:
 ```go
 package main
 
@@ -35,8 +36,8 @@ import (
         "log"
         "net/http"
 
-        graphql "github.com/tokopedia/graphql-go"
-        "github.com/tokopedia/graphql-go/relay"
+        graphql "github.com/graph-gophers/graphql-go"
+        "github.com/graph-gophers/graphql-go/relay"
 )
 
 type query struct{}
@@ -45,9 +46,6 @@ func (_ *query) Hello() string { return "Hello, world!" }
 
 func main() {
         s := `
-                schema {
-                        query: Query
-                }
                 type Query {
                         hello: String!
                 }
@@ -57,11 +55,12 @@ func main() {
         log.Fatal(http.ListenAndServe(":8080", nil))
 }
 ```
-
-To test:
+Then run the file with `go run main.go`. To test:
+	    
 ```sh
-$ curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
+curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
 ```
+For more realistic usecases check our [examples section](https://github.com/graph-gophers/graphql-go/wiki/Examples).
 
 ### Resolvers
 
@@ -103,10 +102,69 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 }
 ```
 
-### Community Examples
+### Schema Options
 
-[tonyghita/graphql-go-example](https://github.com/tonyghita/graphql-go-example) - A more "productionized" version of the Star Wars API example given in this repository.
+- `UseStringDescriptions()` enables the usage of double quoted and triple quoted. When this is not enabled, comments are parsed as descriptions instead.
+- `UseFieldResolvers()` specifies whether to use struct field resolvers.
+- `MaxDepth(n int)` specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
+- `MaxParallelism(n int)` specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
+- `Tracer(tracer trace.Tracer)` is used to trace queries and fields. It defaults to `trace.OpenTracingTracer`.
+- `ValidationTracer(tracer trace.ValidationTracer)` is used to trace validation errors. It defaults to `trace.NoopValidationTracer`.
+- `Logger(logger log.Logger)` is used to log panics during query execution. It defaults to `exec.DefaultLogger`.
+- `PanicHandler(panicHandler errors.PanicHandler)` is used to transform panics into errors during query execution. It defaults to `errors.DefaultPanicHandler`.
+- `DisableIntrospection()` disables introspection queries.
 
-[deltaskelta/graphql-go-pets-example](https://github.com/deltaskelta/graphql-go-pets-example) - graphql-go resolving against a sqlite database
+### Custom Errors
 
-[OscarYuen/go-graphql-starter](https://github.com/OscarYuen/go-graphql-starter) - a starter application integrated with dataloader, psql and basic authentication
+Errors returned by resolvers can include custom extensions by implementing the `ResolverError` interface:
+
+```go
+type ResolverError interface {
+	error
+	Extensions() map[string]interface{}
+}
+```
+
+Example of a simple custom error:
+
+```go
+type droidNotFoundError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e droidNotFoundError) Error() string {
+	return fmt.Sprintf("error [%s]: %s", e.Code, e.Message)
+}
+
+func (e droidNotFoundError) Extensions() map[string]interface{} {
+	return map[string]interface{}{
+		"code":    e.Code,
+		"message": e.Message,
+	}
+}
+```
+
+Which could produce a GraphQL error such as:
+
+```go
+{
+  "errors": [
+    {
+      "message": "error [NotFound]: This is not the droid you are looking for",
+      "path": [
+        "droid"
+      ],
+      "extensions": {
+        "code": "NotFound",
+        "message": "This is not the droid you are looking for"
+      }
+    }
+  ],
+  "data": null
+}
+```
+
+### [Examples](https://github.com/graph-gophers/graphql-go/wiki/Examples)
+
+### [Companies that use this library](https://github.com/graph-gophers/graphql-go/wiki/Users)

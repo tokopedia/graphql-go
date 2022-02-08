@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tokopedia/graphql-go/errors"
-	"github.com/tokopedia/graphql-go/introspection"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"github.com/opentracing/opentracing-go/log"
+	"github.com/tokopedia/graphql-go/errors"
+	"github.com/tokopedia/graphql-go/introspection"
 )
 
 type TraceQueryFinishFunc func([]*errors.QueryError)
@@ -62,6 +62,22 @@ func (OpenTracingTracer) TraceField(ctx context.Context, label, typeName, fieldN
 		if err != nil {
 			ext.Error.Set(span, true)
 			span.SetTag("graphql.error", err.Error())
+		}
+		span.Finish()
+	}
+}
+
+func (OpenTracingTracer) TraceValidation(ctx context.Context) TraceValidationFinishFunc {
+	span, _ := opentracing.StartSpanFromContext(ctx, "Validate Query")
+
+	return func(errs []*errors.QueryError) {
+		if len(errs) > 0 {
+			msg := errs[0].Error()
+			if len(errs) > 1 {
+				msg += fmt.Sprintf(" (and %d more errors)", len(errs)-1)
+			}
+			ext.Error.Set(span, true)
+			span.SetTag("graphql.error", msg)
 		}
 		span.Finish()
 	}
