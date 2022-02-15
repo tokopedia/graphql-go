@@ -7,8 +7,8 @@ import (
 	"strings"
 	"text/scanner"
 
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/types"
+	"github.com/tokopedia/graphql-go/errors"
+	"github.com/tokopedia/graphql-go/types"
 )
 
 type syntaxError string

@@ -1,7 +1,7 @@
 package schema
 
 import (
-	"github.com/graph-gophers/graphql-go/types"
+	"github.com/tokopedia/graphql-go/types"
 )
 
 func init() {

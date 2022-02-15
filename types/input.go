@@ -1,6 +1,6 @@
 package types
 
-import "github.com/graph-gophers/graphql-go/errors"
+import "github.com/tokopedia/graphql-go/errors"
 
 // InputValueDefinition is a representation of the GraphQL InputValueDefinition.
 //

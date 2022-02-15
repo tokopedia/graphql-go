@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/graph-gophers/graphql-go/decode"
-	"github.com/graph-gophers/graphql-go/internal/exec/packer"
-	"github.com/graph-gophers/graphql-go/types"
+	"github.com/tokopedia/graphql-go/decode"
+	"github.com/tokopedia/graphql-go/internal/exec/packer"
+	"github.com/tokopedia/graphql-go/types"
 )
 
 type Schema struct {

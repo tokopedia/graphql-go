@@ -3,7 +3,7 @@ package trace_test
 import (
 	"testing"
 
-	"github.com/graph-gophers/graphql-go/trace"
+	"github.com/tokopedia/graphql-go/trace"
 )
 
 func TestInterfaceImplementation(t *testing.T) {

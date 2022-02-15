@@ -5,12 +5,12 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/internal/exec/packer"
-	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
-	"github.com/graph-gophers/graphql-go/internal/query"
-	"github.com/graph-gophers/graphql-go/introspection"
-	"github.com/graph-gophers/graphql-go/types"
+	"github.com/tokopedia/graphql-go/errors"
+	"github.com/tokopedia/graphql-go/internal/exec/packer"
+	"github.com/tokopedia/graphql-go/internal/exec/resolvable"
+	"github.com/tokopedia/graphql-go/internal/query"
+	"github.com/tokopedia/graphql-go/introspection"
+	"github.com/tokopedia/graphql-go/types"
 )
 
 type Request struct {

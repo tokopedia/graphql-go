@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/introspection"
+	"github.com/tokopedia/graphql-go/errors"
+	"github.com/tokopedia/graphql-go/introspection"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"

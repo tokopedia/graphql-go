@@ -1,4 +1,4 @@
-module github.com/graph-gophers/graphql-go
+module github.com/tokopedia/graphql-go
 
 require (
 	github.com/go-logr/stdr v1.2.2 // indirect
