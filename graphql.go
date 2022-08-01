@@ -178,19 +178,20 @@ type Response struct {
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
-// Validate validates the given query with the schema.
-func (s *Schema) Validate(queryString string) []*errors.QueryError {
+//Validate validates the given query with the schema.
+func (s *Schema) Validate(queryString string) ([]string, bool, []*errors.QueryError) {
 	return s.ValidateWithVariables(queryString, nil)
 }
 
 // ValidateWithVariables validates the given query with the schema and the input variables.
-func (s *Schema) ValidateWithVariables(queryString string, variables map[string]interface{}) []*errors.QueryError {
+func (s *Schema) ValidateWithVariables(queryString string, variables map[string]interface{}) ([]string, bool, []*errors.QueryError) {
+	var queries []string
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
-		return []*errors.QueryError{qErr}
+		return queries, true, []*errors.QueryError{qErr}
 	}
 
-	return validation.Validate(s.schema, doc, variables, s.maxDepth)
+	return queries, false, validation.Validate(s.schema, doc, variables, s.maxDepth)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
