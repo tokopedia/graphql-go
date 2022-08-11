@@ -4,6 +4,10 @@ import (
 	"fmt"
 )
 
+type GraphQLError interface {
+	PrepareExtErr() *QueryError
+}
+
 type QueryError struct {
 	Err           error                  `json:"-"` // Err holds underlying if available
 	Message       string                 `json:"message"`

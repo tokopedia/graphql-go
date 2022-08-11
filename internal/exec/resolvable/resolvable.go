@@ -3,6 +3,7 @@ package resolvable
 import (
 	"context"
 	"fmt"
+	"github.com/tokopedia/graphql-go/errors"
 	"reflect"
 	"strings"
 
@@ -307,6 +308,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields types.FieldsDefinit
 
 var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
+var extnErrorInterfaceType = reflect.TypeOf((*errors.GraphQLError)(nil)).Elem()
 
 func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m reflect.Method, sf reflect.StructField,
 	methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
@@ -357,7 +359,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m
 
 		hasError = m.Type.NumOut() == maxNumOfReturns
 		if hasError {
-			if m.Type.Out(maxNumOfReturns-1) != errorType {
+			if m.Type.Out(maxNumOfReturns-1) != errorType && !m.Type.Out(1).Implements(extnErrorInterfaceType) {
 				return nil, fmt.Errorf(`must have "error" as its last return value`)
 			}
 		}
