@@ -61,3 +61,23 @@ func (err *QueryError) Unwrap() error {
 }
 
 var _ error = &QueryError{}
+
+func (err *QueryError) AddErrCode(code int) *QueryError {
+	err.Extensions["Code"] = code
+	return err
+}
+
+func (err *QueryError) AddDevMsg(msg string) *QueryError {
+	err.Extensions["DeveloperMessage"] = msg
+	return err
+}
+
+func (err *QueryError) AddMoreInfo(moreInfo string) *QueryError {
+	err.Extensions["MoreInfo"] = moreInfo
+	return err
+}
+
+func (err *QueryError) AddErrTimestamp(errTime string) *QueryError {
+	err.Extensions["Timestamp"] = errTime
+	return err
+}
