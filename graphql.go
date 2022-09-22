@@ -186,17 +186,22 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		var queue = make([][]query.Selection, 0)
 		queue = enqueue(queue, op.Selections)
 		for len(queue) > 0 {
-			selections, queue := dequeue(queue)
+			var selections []query.Selection
+			selections, queue = dequeue(queue)
 			if selections != nil {
-				resolverComplexity += 2
 				for _, sel := range selections {
-					Query, _ := sel.(*query.Field)
-					queue = enqueue(queue, Query.Selections)
+					Query, ok := sel.(*query.Field)
+					if ok {
+						queue = enqueue(queue, Query.Selections)
+						if len(Query.Selections) > 0 {
+							resolverComplexity += 2
+						} else {
+							resolverComplexity++
+						}
+					}
 
 				}
 
-			} else {
-				resolverComplexity++
 			}
 
 		}
