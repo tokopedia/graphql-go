@@ -181,33 +181,13 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 
 	//object type will have resolver complexity as 2 and field type will have resolver complexity as 1
 	resolverComplexity := 0
-	var queue = make([][]query.Selection, 0)
 	for _, op := range doc.Operations {
-		queue = enqueue(queue, op.Selections)
-		for len(queue) > 0 {
-			var selections []query.Selection
-			selections, queue = dequeue(queue)
-			if selections != nil {
-				for _, sel := range selections {
-					Query, ok := sel.(*query.Field)
-					if ok {
-						queue = enqueue(queue, Query.Selections)
-						if len(Query.Selections) > 0 {
-							resolverComplexity += 2
-						} else {
-							resolverComplexity++
-						}
-					}
-
-				}
-
-			}
-
-		}
+		var queue = make([][]query.Selection, 0)
+		resolverComplexity += CalculateResolverComplexity(queue, op.Selections)
 	}
 
 	QueryNestingDepth := CalculateNestingDepth(queryString)
-	println("Resolver Complexity of Query : %d\n and Nesting Depth of Query : %d\n", resolverComplexity, QueryNestingDepth)
+	println("Resolver Complexity of Request : %d\n and Nesting Depth of Query : %d\n", resolverComplexity, QueryNestingDepth)
 	validationFinish := s.validationTracer.TraceValidation()
 	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
@@ -270,6 +250,34 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		Data:   data,
 		Errors: errs,
 	}
+}
+
+func CalculateResolverComplexity(queue [][]query.Selection, Selections []query.Selection) int {
+	resolvercomplexity := 0
+	queue = enqueue(queue, Selections)
+	for len(queue) > 0 {
+		var selections []query.Selection
+		selections, queue = dequeue(queue)
+		if selections != nil {
+			for _, sel := range selections {
+				Query, ok := sel.(*query.Field)
+				if ok {
+					queue = enqueue(queue, Query.Selections)
+					if len(Query.Selections) > 0 {
+						resolvercomplexity += 2
+					} else {
+						resolvercomplexity++
+					}
+				}
+
+			}
+
+		}
+
+	}
+
+	return resolvercomplexity
+
 }
 
 func getOperation(document *query.Document, operationName string) (*query.Operation, error) {
