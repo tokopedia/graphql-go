@@ -181,9 +181,8 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 
 	//object type will have resolver complexity as 2 and field type will have resolver complexity as 1
 	resolverComplexity := 0
-
+	var queue = make([][]query.Selection, 0)
 	for _, op := range doc.Operations {
-		var queue = make([][]query.Selection, 0)
 		queue = enqueue(queue, op.Selections)
 		for len(queue) > 0 {
 			var selections []query.Selection
