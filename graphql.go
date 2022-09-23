@@ -259,19 +259,17 @@ func CalculateResolverComplexity(queue [][]query.Selection, Selections []query.S
 		var selections []query.Selection
 		selections, queue = dequeue(queue)
 		if selections != nil {
+			resolvercomplexity += 2
 			for _, sel := range selections {
 				Query, ok := sel.(*query.Field)
 				if ok {
 					queue = enqueue(queue, Query.Selections)
-					if len(Query.Selections) > 0 {
-						resolvercomplexity += 2
-					} else {
-						resolvercomplexity++
-					}
 				}
 
 			}
 
+		} else {
+			resolvercomplexity++
 		}
 
 	}
