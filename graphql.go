@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
+	Log "log"
 	"math"
 	"reflect"
 
@@ -187,7 +187,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 
 	QueryNestingDepth := CalculateNestingDepth(queryString)
-	println("Resolver Complexity of Request : %d\n and Nesting Depth of Query : %d\n", resolverComplexity, QueryNestingDepth)
+	Log.Printf("Resolver Complexity of Request : %d\n and Nesting Depth of Query : %d\n\n", resolverComplexity, QueryNestingDepth)
 	validationFinish := s.validationTracer.TraceValidation()
 	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
