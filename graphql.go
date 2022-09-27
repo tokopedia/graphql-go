@@ -178,7 +178,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{qErr}}
 	}
 
-	//object type will have resolver complexity as 2 and field type will have resolver complexity as 1
+	//number of resolvers needed to resolve a single field is 1 hence field type will have resolverComplexity as 1
 	resolverComplexity := 0
 	for _, op := range doc.Operations {
 		var queue = make([][]query.Selection, 0)
