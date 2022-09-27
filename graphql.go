@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	Log "log"
 	"math"
 	"reflect"
 
@@ -187,7 +186,6 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 
 	QueryNestingDepth := CalculateNestingDepth(queryString)
-	Log.Printf("Resolver Complexity of Request : %d\n and Nesting Depth of Query : %d\n\n", resolverComplexity, QueryNestingDepth)
 	validationFinish := s.validationTracer.TraceValidation()
 	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
@@ -249,6 +247,10 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	return &Response{
 		Data:   data,
 		Errors: errs,
+		Extensions: map[string]interface{}{
+			"Resolver Complexity": resolverComplexity,
+			"Nesting Depth":       QueryNestingDepth,
+		},
 	}
 }
 
@@ -259,7 +261,6 @@ func CalculateResolverComplexity(queue [][]query.Selection, Selections []query.S
 		var selections []query.Selection
 		selections, queue = dequeue(queue)
 		if selections != nil {
-			resolvercomplexity += 2
 			for _, sel := range selections {
 				Query, ok := sel.(*query.Field)
 				if ok {
