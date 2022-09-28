@@ -247,10 +247,14 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	en := time.Now()
 	latency := en.Sub(st) //time taken to execute the query and get back the response
 	finish(errs)
-	LatencyThreshold := float64(5000)       //threshold for latency in ms
-	ResponseSizeThreshold := float64(10000) // threshold for response size in bytes
-	NestingDepthThreshold := float64(20)    // threshold for nesting depth
-	ResolverThreshold := float64(100)       // threshold for number of resolvers
+	LatencyMaxThreshold := float64(5000)       //upper bound for latency in ms
+	LatencyMinThreshold := float64(0)          // lower bound for latency in ms
+	ResponseSizeMaxThreshold := float64(10000) // upper bound for response size in bytes
+	ResponseSizeMinThreshold := float64(1)     //lower bound for response size in bytes
+	NestingDepthMaxThreshold := float64(20)    // upper bound for nesting depth
+	NestingDepthMinThreshold := float64(2)     //lower bound for nesting depth
+	ResolverMaxThreshold := float64(100)       // upper bound for number of resolvers
+	ResolverMinThreshold := float64(1)         // lower bound for number of resolvers
 
 	/*Calculating the score on the basis of latency, response size, nesting depth and number of resolvers.
 	Each parameter can contribute an individual score ranging from 0 to 1. Hence, for a query with parameters
@@ -258,7 +262,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	score of above 4, then this means that the threshold values have not been obeyed and the query is complex or not
 	lightweight
 	*/
-	Score := float64(latency.Milliseconds())/LatencyThreshold + float64(len(data)-1)/(ResponseSizeThreshold-1) + float64(QueryNestingDepth-2)/(NestingDepthThreshold-2) + float64(resolverComplexity-1)/(ResolverThreshold-1)
+	Score := float64(latency.Milliseconds())/(LatencyMaxThreshold-LatencyMinThreshold) + float64(len(data)-int(ResolverMinThreshold))/(ResponseSizeMaxThreshold-ResponseSizeMinThreshold) + float64(QueryNestingDepth-int(NestingDepthMinThreshold))/(NestingDepthMaxThreshold-NestingDepthMinThreshold) + float64(resolverComplexity-int(ResolverMinThreshold))/(ResolverMaxThreshold-ResolverMinThreshold)
 	return &Response{
 		Data:   data,
 		Errors: errs,
