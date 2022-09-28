@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"time"
 
 	"github.com/tokopedia/graphql-go/errors"
 	"github.com/tokopedia/graphql-go/internal/common"
@@ -241,15 +242,32 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		varTypes[v.Name.Name] = introspection.WrapType(t)
 	}
 	traceCtx, finish := s.tracer.TraceQuery(ctx, queryString, operationName, variables, varTypes)
+	st := time.Now()
 	data, errs := r.Execute(traceCtx, res, op)
+	en := time.Now()
+	latency := en.Sub(st) //time taken to execute the query and get back the response
 	finish(errs)
+	LatencyThreshold := float64(5000)       //threshold for latency in ms
+	ResponseSizeThreshold := float64(10000) // threshold for response size in bytes
+	NestingDepthThreshold := float64(20)    // threshold for nesting depth
+	ResolverThreshold := float64(100)       // threshold for number of resolvers
 
+	/*Calculating the score on the basis of latency, response size, nesting depth and number of resolvers.
+	Each parameter can contribute an individual score ranging from 0 to 1. Hence, for a query with parameters
+	below or equal to the threshold values defined, the cumulative score won't go above 4. If a query has a cumulative
+	score of above 4, then this means that the threshold values have not been obeyed and the query is complex or not
+	lightweight
+	*/
+	Score := float64(latency.Milliseconds())/LatencyThreshold + float64(len(data)-1)/(ResponseSizeThreshold-1) + float64(QueryNestingDepth-2)/(NestingDepthThreshold-2) + float64(resolverComplexity-1)/(ResolverThreshold-1)
 	return &Response{
 		Data:   data,
 		Errors: errs,
 		Extensions: map[string]interface{}{
 			"Resolver Complexity": resolverComplexity,
 			"Nesting Depth":       QueryNestingDepth,
+			"latency":             latency.Milliseconds(),
+			"Response Size":       len(data),
+			"Score":               Score,
 		},
 	}
 }
