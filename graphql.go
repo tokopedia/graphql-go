@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
+	"time"
 
 	"github.com/tokopedia/graphql-go/errors"
 	"github.com/tokopedia/graphql-go/internal/common"
@@ -17,6 +19,19 @@ import (
 	"github.com/tokopedia/graphql-go/introspection"
 	"github.com/tokopedia/graphql-go/log"
 	"github.com/tokopedia/graphql-go/trace"
+)
+
+//parameters for generating score for query complexity analysis
+const (
+	LatencyMaxThreshold      = float64(4000)  //upper bound for latency in ms
+	LatencyMinThreshold      = float64(0)     // lower bound for latency in ms
+	ResponseSizeMaxThreshold = float64(10000) // upper bound for response size in bytes
+	ResponseSizeMinThreshold = float64(1)     //lower bound for response size in bytes
+	NestingDepthMaxThreshold = float64(10)    // upper bound for nesting depth
+	NestingDepthMinThreshold = float64(2)     //lower bound for nesting depth
+	ResolverMaxThreshold     = float64(200)   // upper bound for number of resolvers
+	ResolverMinThreshold     = float64(1)     // lower bound for number of resolvers
+
 )
 
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
@@ -143,13 +158,13 @@ type Response struct {
 
 // Validate validates the given query with the schema.
 func (s *Schema) Validate(queryString string, variables map[string]interface{}) ([]string, bool, []*errors.QueryError) {
-	var queries []string	
+	var queries []string
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return queries, true, []*errors.QueryError{qErr}
 	}
-	for _, op := range doc.Operations{
-		for _, sel := range op.Selections{
+	for _, op := range doc.Operations {
+		for _, sel := range op.Selections {
 			query, ok := sel.(*query.Field)
 			if ok {
 				queries = append(queries, query.Name.Name)
@@ -177,6 +192,14 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{qErr}}
 	}
 
+	//number of resolvers needed to resolve a single field is 1 hence field type will have resolverComplexity as 1
+	resolverComplexity := 0
+	for _, op := range doc.Operations {
+		var queue = make([][]query.Selection, 0)
+		resolverComplexity += CalculateResolverComplexity(queue, op.Selections)
+	}
+
+	QueryNestingDepth := CalculateNestingDepth(queryString)
 	validationFinish := s.validationTracer.TraceValidation()
 	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
@@ -232,13 +255,54 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		varTypes[v.Name.Name] = introspection.WrapType(t)
 	}
 	traceCtx, finish := s.tracer.TraceQuery(ctx, queryString, operationName, variables, varTypes)
+	st := time.Now()
 	data, errs := r.Execute(traceCtx, res, op)
+	en := time.Now()
+	latency := en.Sub(st) //time taken to execute the query and get back the response
 	finish(errs)
-
+	/*Calculating the score on the basis of latency, response size, nesting depth and number of resolvers.
+	Each parameter can contribute an individual score ranging from 0 to 1. Hence, for a query with parameters
+	below or equal to the threshold values defined, the cumulative score won't go above 4. If a query has a cumulative
+	score of above 4, then this means that the threshold values have not been obeyed and the query is complex or not
+	lightweight
+	*/
+	Score := float64(latency.Milliseconds())/(LatencyMaxThreshold-LatencyMinThreshold) + float64(len(data)-int(ResolverMinThreshold))/(ResponseSizeMaxThreshold-ResponseSizeMinThreshold) + float64(QueryNestingDepth-int(NestingDepthMinThreshold))/(NestingDepthMaxThreshold-NestingDepthMinThreshold) + float64(resolverComplexity-int(ResolverMinThreshold))/(ResolverMaxThreshold-ResolverMinThreshold)
 	return &Response{
 		Data:   data,
 		Errors: errs,
+		Extensions: map[string]interface{}{
+			"Resolver Complexity": resolverComplexity,
+			"Nesting Depth":       QueryNestingDepth,
+			"latency":             latency.Milliseconds(),
+			"Response Size":       len(data),
+			"Score":               Score,
+		},
 	}
+}
+
+func CalculateResolverComplexity(queue [][]query.Selection, Selections []query.Selection) int {
+	resolvercomplexity := 0
+	queue = enqueue(queue, Selections)
+	for len(queue) > 0 {
+		var selections []query.Selection
+		selections, queue = dequeue(queue)
+		if selections != nil {
+			for _, sel := range selections {
+				Query, ok := sel.(*query.Field)
+				if ok {
+					queue = enqueue(queue, Query.Selections)
+				}
+
+			}
+
+		} else {
+			resolvercomplexity++
+		}
+
+	}
+
+	return resolvercomplexity
+
 }
 
 func getOperation(document *query.Document, operationName string) (*query.Operation, error) {
@@ -260,4 +324,34 @@ func getOperation(document *query.Document, operationName string) (*query.Operat
 		return nil, fmt.Errorf("no operation with name %q", operationName)
 	}
 	return op, nil
+}
+
+func CalculateNestingDepth(queryString string) int {
+	depth := 0
+	max := math.MinInt32
+	for _, ch := range queryString {
+		if ch == '{' {
+			depth++
+		} else if ch == '}' {
+			depth--
+		}
+		max = int(math.Max(float64(max), float64(depth)))
+	}
+	return max
+}
+
+func enqueue(queue [][]query.Selection, element []query.Selection) [][]query.Selection {
+	queue = append(queue, element)
+	return queue
+}
+
+func dequeue(queue [][]query.Selection) ([]query.Selection, [][]query.Selection) {
+	element := queue[0]
+	if len(queue) == 1 {
+		var tmp [][]query.Selection
+		return element, tmp
+
+	}
+
+	return element, queue[1:]
 }
