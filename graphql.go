@@ -21,6 +21,19 @@ import (
 	"github.com/tokopedia/graphql-go/trace"
 )
 
+//parameters for generating score for query complexity analysis
+const (
+	LatencyMaxThreshold      = float64(4000)  //upper bound for latency in ms
+	LatencyMinThreshold      = float64(0)     // lower bound for latency in ms
+	ResponseSizeMaxThreshold = float64(10000) // upper bound for response size in bytes
+	ResponseSizeMinThreshold = float64(1)     //lower bound for response size in bytes
+	NestingDepthMaxThreshold = float64(10)    // upper bound for nesting depth
+	NestingDepthMinThreshold = float64(2)     //lower bound for nesting depth
+	ResolverMaxThreshold     = float64(200)   // upper bound for number of resolvers
+	ResolverMinThreshold     = float64(1)     // lower bound for number of resolvers
+
+)
+
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
 // the Go type signature of the resolvers does not match the schema. If nil is passed as the
 // resolver, then the schema can not be executed, but it may be inspected (e.g. with ToJSON).
@@ -247,15 +260,6 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	en := time.Now()
 	latency := en.Sub(st) //time taken to execute the query and get back the response
 	finish(errs)
-	LatencyMaxThreshold := float64(5000)       //upper bound for latency in ms
-	LatencyMinThreshold := float64(0)          // lower bound for latency in ms
-	ResponseSizeMaxThreshold := float64(10000) // upper bound for response size in bytes
-	ResponseSizeMinThreshold := float64(1)     //lower bound for response size in bytes
-	NestingDepthMaxThreshold := float64(20)    // upper bound for nesting depth
-	NestingDepthMinThreshold := float64(2)     //lower bound for nesting depth
-	ResolverMaxThreshold := float64(100)       // upper bound for number of resolvers
-	ResolverMinThreshold := float64(1)         // lower bound for number of resolvers
-
 	/*Calculating the score on the basis of latency, response size, nesting depth and number of resolvers.
 	Each parameter can contribute an individual score ranging from 0 to 1. Hence, for a query with parameters
 	below or equal to the threshold values defined, the cumulative score won't go above 4. If a query has a cumulative
