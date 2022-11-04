@@ -191,6 +191,15 @@ func (s *Schema) ValidateWithVariables(queryString string, variables map[string]
 		return queries, true, []*errors.QueryError{qErr}
 	}
 
+	for _, op := range doc.Operations {
+		for _, sel := range op.Selections {
+			query, ok := sel.(*types.Field)
+			if ok {
+				queries = append(queries, query.Name.Name)
+			}
+		}
+	}
+
 	return queries, false, validation.Validate(s.schema, doc, variables, s.maxDepth)
 }
 
