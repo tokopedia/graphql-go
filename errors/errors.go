@@ -37,8 +37,9 @@ func Errorf(format string, a ...interface{}) *QueryError {
 	}
 
 	return &QueryError{
-		Err:     err,
-		Message: fmt.Sprintf(format, a...),
+		Err:        err,
+		Message:    fmt.Sprintf(format, a...),
+		Extensions: make(map[string]interface{}),
 	}
 }
 
@@ -47,6 +48,20 @@ func (err *QueryError) Error() string {
 		return "<nil>"
 	}
 	str := fmt.Sprintf("graphql: %s", err.Message)
+
+	if err.Extensions["Code"] != 0 && err.Extensions["Code"] != nil {
+		str += fmt.Sprintf(" code: %d", err.Extensions["Code"])
+	}
+	if err.Extensions["DeveloperMessage"] != "" && err.Extensions["Code"] != nil {
+		str += fmt.Sprintf(" developerMessage: %s", err.Extensions["DeveloperMessage"])
+	}
+	if err.Extensions["MoreInfo"] != "" && err.Extensions["Code"] != nil {
+		str += fmt.Sprintf(" moreInfo: %s", err.Extensions["MoreInfo"])
+	}
+	if err.Extensions["Timestamp"] != "" && err.Extensions["Code"] != nil {
+		str += fmt.Sprintf(" timestamp: %s", err.Extensions["Timestamp"])
+	}
+
 	for _, loc := range err.Locations {
 		str += fmt.Sprintf(" (line %d, column %d)", loc.Line, loc.Column)
 	}
