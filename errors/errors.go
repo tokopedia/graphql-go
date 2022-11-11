@@ -15,7 +15,7 @@ type QueryError struct {
 	Path          []interface{}          `json:"path,omitempty"`
 	Rule          string                 `json:"-"`
 	ResolverError error                  `json:"-"`
-	Extensions    map[string]interface{} `json:"extensions,omitempty"`
+	Extensions    map[string]interface{} `json:"extensions"`
 }
 
 type Location struct {
