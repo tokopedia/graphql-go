@@ -68,6 +68,7 @@ type Schema struct {
 	logger                log.Logger
 	useStringDescriptions bool
 	disableIntrospection  bool
+	isPanicLogEnabled     bool
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
@@ -159,6 +160,19 @@ func (s *Schema) Validate(queryString string, variables map[string]interface{}) 
 	return queries, false, validation.Validate(s.schema, doc, variables, s.maxDepth)
 }
 
+//EnablePanicLogging enables query info logging if panic occurs
+func (s *Schema) EnablePanicLogging() {
+	s.isPanicLogEnabled = true
+	s.logger = getLogger(s)
+}
+
+func getLogger(s *Schema) log.Logger {
+	if s != nil && s.isPanicLogEnabled {
+		return &log.CustomLogger{true}
+	}
+	return &log.DefaultLogger{}
+}
+
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
 // without a resolver. If the context get cancelled, no further resolvers will be called and a
 // the context error will be returned as soon as possible (not immediately).
@@ -232,6 +246,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		varTypes[v.Name.Name] = introspection.WrapType(t)
 	}
 	traceCtx, finish := s.tracer.TraceQuery(ctx, queryString, operationName, variables, varTypes)
+	r.QInfo = fmt.Sprintf("Query: %s\nVariables: %+v\n", queryString, variables)
 	data, errs := r.Execute(traceCtx, res, op)
 	finish(errs)
 
