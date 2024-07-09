@@ -992,6 +992,10 @@ func typeCanBeUsedAs(t, as types.Type) bool {
 	if t == as {
 		return true
 	}
+	// Tokopedia-TTS specific requirement
+	if t.String() == "Int" && (as.String() == "Int64" || as.String() == "Int53") {
+		return true
+	}
 
 	if lT, ok := t.(*types.List); ok {
 		if lAs, ok := as.(*types.List); ok {
