@@ -27,9 +27,14 @@ type Request struct {
 	SubscribeResolverTimeout time.Duration
 }
 
-func (r *Request) handlePanic(ctx context.Context) {
+func (r *Request) handlePanic(ctx context.Context, sels ...[]selected.Selection) {
 	if value := recover(); value != nil {
-		r.Logger.LogPanic(ctx, value)
+		var sel selected.Selection
+		if len(sels) > 0 && len(sels[0]) > 0 {
+			sel = sels[0][0]
+		}
+		err := fmt.Sprintf("%v with query = %v", value, sel)
+		r.Logger.LogPanic(ctx, err)
 		r.AddError(r.PanicHandler.MakePanicError(ctx, value))
 	}
 }
@@ -41,8 +46,9 @@ type extensionser interface {
 func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *types.OperationDefinition) ([]byte, []*errors.QueryError) {
 	var out bytes.Buffer
 	func() {
-		defer r.handlePanic(ctx)
-		sels := selected.ApplyOperation(&r.Request, s, op)
+		var sels []selected.Selection
+		defer r.handlePanic(ctx, sels)
+		sels = selected.ApplyOperation(&r.Request, s, op)
 		r.execSelections(ctx, sels, nil, s, s.Resolver, &out, op.Type == query.Mutation)
 	}()
 
@@ -76,7 +82,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 		for _, f := range fields {
 			go func(f *fieldToExec) {
 				defer wg.Done()
-				defer r.handlePanic(ctx)
+				defer r.handlePanic(ctx, sels)
 				f.out = new(bytes.Buffer)
 				execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
 			}(f)
@@ -328,7 +334,7 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 			sem <- struct{}{}
 			go func(i int) {
 				defer func() { <-sem }()
-				defer r.handlePanic(ctx)
+				defer r.handlePanic(ctx, sels)
 				r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])
 			}(i)
 		}
