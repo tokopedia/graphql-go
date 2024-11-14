@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -113,9 +115,96 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 		out.WriteString(f.field.Alias)
 		out.WriteByte('"')
 		out.WriteByte(':')
-		out.Write(f.out.Bytes())
+		bb := f.out.Bytes()
+		out.Write(bb)
+		needStrCounterpart, isArray := isNeedStrCounterpart(f.field)
+		if needStrCounterpart {
+			out.WriteByte(',')
+			out.WriteByte('"')
+			out.WriteString(f.field.Alias + "_str_auto_")
+			out.WriteByte('"')
+			out.WriteByte(':')
+			if isArray {
+				var arrStr []int64
+				err := json.Unmarshal(bb, &arrStr)
+				if err != nil {
+					out.Write(bb)
+				} else {
+					out.WriteByte('[')
+					for j, v := range arrStr {
+						if j > 0 {
+							out.WriteByte(',')
+						}
+						out.WriteByte('"')
+						out.WriteString(strconv.FormatInt(v, 10))
+						out.WriteByte('"')
+					}
+					out.WriteByte(']')
+				}
+			} else {
+				out.WriteByte('"')
+				out.Write(bb)
+				out.WriteByte('"')
+			}
+		}
 	}
 	out.WriteByte('}')
+}
+
+// to handle JS limitation of int64, we create duplicate of this fields as string
+// currently limited to these fields only as per Toko-TTS requirement
+var (
+	targetFields = map[string]bool{
+		"product_id":  true,
+		"productid":   true,
+		"product_ids": true,
+		"productids":  true,
+	}
+	singularInt64Maps = map[string]bool{
+		"Int":           true,
+		"Int!":          true,
+		"Int64":         true,
+		"Int64!":        true,
+		"SuperInteger":  true,
+		"SuperInteger!": true,
+	}
+	arrayInt64Maps = map[string]bool{
+		"[Int]":            true,
+		"[Int!]":           true,
+		"[Int]!":           true,
+		"[Int!]!":          true,
+		"[Int64]":          true,
+		"[Int64!]":         true,
+		"[Int64]!":         true,
+		"[Int64!]!":        true,
+		"[SuperInteger]":   true,
+		"[SuperInteger!]":  true,
+		"[SuperInteger]!":  true,
+		"[SuperInteger!]!": true,
+	}
+)
+
+func isNeedStrCounterpart(field *selected.SchemaField) (needStrCounterpart, isArray bool) {
+	defType := field.FieldDefinition.Type.String()
+	fieldName := strings.ToLower(field.Alias)
+	isTargetField, ok := targetFields[fieldName]
+	if ok && isTargetField {
+		// is it single object?
+		isTargetTypeSingular, ok := singularInt64Maps[defType]
+		if ok && isTargetTypeSingular {
+			isArray = false
+			needStrCounterpart = true
+			return
+		}
+		// is it array?
+		isTargetTypeArray, ok := arrayInt64Maps[defType]
+		if ok && isTargetTypeArray {
+			isArray = true
+			needStrCounterpart = true
+			return
+		}
+	}
+	return
 }
 
 func collectFieldsToResolve(sels []selected.Selection, s *resolvable.Schema, resolver reflect.Value, fields *[]*fieldToExec, fieldByAlias map[string]*fieldToExec) {
