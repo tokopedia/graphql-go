@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"strings"
 	"text/scanner"
 
 	"github.com/tokopedia/graphql-go/errors"
@@ -99,7 +100,15 @@ func parseSelectionSet(l *common.Lexer) []types.Selection {
 	var sels []types.Selection
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
-		sels = append(sels, parseSelection(l))
+		f := parseSelection(l)
+		switch sel := f.(type) {
+		case *types.Field:
+			if !strings.HasSuffix(sel.Alias.Name, types.DUPLICATION_SUFFIX) {
+				sels = append(sels, f)
+			}
+		default:
+			sels = append(sels, f)
+		}
 	}
 	l.ConsumeToken('}')
 	return sels

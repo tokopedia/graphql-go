@@ -27,6 +27,7 @@ type Request struct {
 	Logger                   log.Logger
 	PanicHandler             errors.PanicHandler
 	SubscribeResolverTimeout time.Duration
+	EnableInt64Duplication   bool // Specific flag to indicate duplication of int64 fields to string
 }
 
 func (r *Request) handlePanic(ctx context.Context, sels ...[]selected.Selection) {
@@ -117,34 +118,36 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 		out.WriteByte(':')
 		bb := f.out.Bytes()
 		out.Write(bb)
-		needStrCounterpart, isArray := isNeedStrCounterpart(f.field)
-		if needStrCounterpart {
-			out.WriteByte(',')
-			out.WriteByte('"')
-			out.WriteString(f.field.Alias + "_str_auto_")
-			out.WriteByte('"')
-			out.WriteByte(':')
-			if isArray {
-				var arrStr []int64
-				err := json.Unmarshal(bb, &arrStr)
-				if err != nil {
-					out.Write(bb)
-				} else {
-					out.WriteByte('[')
-					for j, v := range arrStr {
-						if j > 0 {
-							out.WriteByte(',')
+		if r.EnableInt64Duplication {
+			needStrCounterpart, isArray := isNeedStrCounterpart(f.field)
+			if needStrCounterpart {
+				out.WriteByte(',')
+				out.WriteByte('"')
+				out.WriteString(f.field.Alias + types.DUPLICATION_SUFFIX)
+				out.WriteByte('"')
+				out.WriteByte(':')
+				if isArray {
+					var arrStr []int64
+					err := json.Unmarshal(bb, &arrStr)
+					if err != nil {
+						out.Write(bb)
+					} else {
+						out.WriteByte('[')
+						for j, v := range arrStr {
+							if j > 0 {
+								out.WriteByte(',')
+							}
+							out.WriteByte('"')
+							out.WriteString(strconv.FormatInt(v, 10))
+							out.WriteByte('"')
 						}
-						out.WriteByte('"')
-						out.WriteString(strconv.FormatInt(v, 10))
-						out.WriteByte('"')
+						out.WriteByte(']')
 					}
-					out.WriteByte(']')
+				} else {
+					out.WriteByte('"')
+					out.Write(bb)
+					out.WriteByte('"')
 				}
-			} else {
-				out.WriteByte('"')
-				out.Write(bb)
-				out.WriteByte('"')
 			}
 		}
 	}
@@ -155,10 +158,15 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 // currently limited to these fields only as per Toko-TTS requirement
 var (
 	targetFields = map[string]bool{
+		"id":          true,
 		"product_id":  true,
 		"productid":   true,
 		"product_ids": true,
 		"productids":  true,
+		"shop_id":     true,
+		"shopid":      true,
+		"shop_ids":    true,
+		"shopids":     true,
 	}
 	singularInt64Maps = map[string]bool{
 		"Int":           true,
