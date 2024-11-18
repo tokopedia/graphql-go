@@ -39,12 +39,13 @@ type SelectionSet []Selection
 
 // Field represents a field used in a query.
 type Field struct {
-	Alias           Ident
-	Name            Ident
-	Arguments       ArgumentList
-	Directives      DirectiveList
-	SelectionSet    SelectionSet
-	SelectionSetLoc errors.Location
+	Alias              Ident
+	Name               Ident
+	Arguments          ArgumentList
+	Directives         DirectiveList
+	SelectionSet       SelectionSet
+	SelectionSetLoc    errors.Location
+	NeedStrCounterpart bool
 }
 
 func (Field) isSelection() {}

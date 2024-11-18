@@ -47,12 +47,13 @@ type Selection interface {
 
 type SchemaField struct {
 	resolvable.Field
-	Alias       string
-	Args        map[string]interface{}
-	PackedArgs  reflect.Value
-	Sels        []Selection
-	Async       bool
-	FixedResult reflect.Value
+	Alias              string
+	Args               map[string]interface{}
+	PackedArgs         reflect.Value
+	Sels               []Selection
+	Async              bool
+	FixedResult        reflect.Value
+	NeedStrCounterpart bool
 }
 
 type TypeAssertion struct {
@@ -152,12 +153,13 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 
 				fieldSels := applyField(r, s, fe.ValueExec, field.SelectionSet)
 				flattenedSels = append(flattenedSels, &SchemaField{
-					Field:      *fe,
-					Alias:      field.Alias.Name,
-					Args:       args,
-					PackedArgs: packedArgs,
-					Sels:       fieldSels,
-					Async:      fe.HasContext || fe.ArgsPacker != nil || fe.HasError || HasAsyncSel(fieldSels),
+					Field:              *fe,
+					Alias:              field.Alias.Name,
+					Args:               args,
+					PackedArgs:         packedArgs,
+					Sels:               fieldSels,
+					Async:              fe.HasContext || fe.ArgsPacker != nil || fe.HasError || HasAsyncSel(fieldSels),
+					NeedStrCounterpart: field.NeedStrCounterpart,
 				})
 			}
 

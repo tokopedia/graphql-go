@@ -98,6 +98,8 @@ func parseFragment(l *common.Lexer) *types.FragmentDefinition {
 
 func parseSelectionSet(l *common.Lexer) []types.Selection {
 	var sels []types.Selection
+	originalFields := make(map[string]*types.Field, 0)
+	needDuplicateFields := make([]string, 0)
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
 		f := parseSelection(l)
@@ -105,12 +107,21 @@ func parseSelectionSet(l *common.Lexer) []types.Selection {
 		case *types.Field:
 			if !strings.HasSuffix(sel.Alias.Name, types.DUPLICATION_SUFFIX) {
 				sels = append(sels, f)
+				originalFields[sel.Alias.Name] = sel
+			} else {
+				needDuplicateFields = append(needDuplicateFields, strings.ReplaceAll(sel.Alias.Name, types.DUPLICATION_SUFFIX, ""))
 			}
 		default:
 			sels = append(sels, f)
 		}
 	}
 	l.ConsumeToken('}')
+	for _, fieldName := range needDuplicateFields {
+		f, ok := originalFields[fieldName]
+		if ok {
+			f.NeedStrCounterpart = true
+		}
+	}
 	return sels
 }
 
