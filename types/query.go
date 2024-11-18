@@ -46,6 +46,7 @@ type Field struct {
 	SelectionSet       SelectionSet
 	SelectionSetLoc    errors.Location
 	NeedStrCounterpart bool
+	CounterpartAlias   string
 }
 
 func (Field) isSelection() {}

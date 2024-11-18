@@ -122,7 +122,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 			if needStrCounterpart {
 				out.WriteByte(',')
 				out.WriteByte('"')
-				out.WriteString(f.field.Alias + types.DUPLICATION_SUFFIX)
+				out.WriteString(f.field.CounterpartAlias)
 				out.WriteByte('"')
 				out.WriteByte(':')
 				if isArray {
