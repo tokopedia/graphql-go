@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/tokopedia/graphql-go"
 	"github.com/tokopedia/graphql-go/decode"
 )
 
@@ -14,8 +15,8 @@ func TestNullInt_ImplementsUnmarshaler(t *testing.T) {
 		}
 	}()
 
-	// assert *NullInt implements decode.Unmarshaler interface
-	var _ decode.Unmarshaler = (*NullInt)(nil)
+	// assert *graphql.NullInt implements decode.Unmarshaler interface
+	var _ decode.Unmarshaler = (*graphql.NullInt)(nil)
 }
 
 func TestNullInt_UnmarshalGraphQL(t *testing.T) {
@@ -27,7 +28,7 @@ func TestNullInt_UnmarshalGraphQL(t *testing.T) {
 	b := float64(math.MinInt32 - 1)
 	c := 1234.6
 	good := int32(1234)
-	ref := NullInt{
+	ref := graphql.NullInt{
 		Value: &good,
 		Set:   true,
 	}
@@ -68,7 +69,7 @@ func TestNullInt_UnmarshalGraphQL(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				gt := new(NullInt)
+				gt := new(graphql.NullInt)
 				if err := gt.UnmarshalGraphQL(tt.args.input); err != nil {
 					if err.Error() != tt.wantErr {
 						t.Errorf("UnmarshalGraphQL() error = %v, want = %s", err, tt.wantErr)
@@ -85,7 +86,7 @@ func TestNullInt_UnmarshalGraphQL(t *testing.T) {
 	tests := []struct {
 		name   string
 		args   args
-		wantEq NullInt
+		wantEq graphql.NullInt
 	}{
 		{
 			name: "int32",
@@ -105,7 +106,7 @@ func TestNullInt_UnmarshalGraphQL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gt := new(NullInt)
+			gt := new(graphql.NullInt)
 			if err := gt.UnmarshalGraphQL(tt.args.input); err != nil {
 				t.Errorf("UnmarshalGraphQL() error = %v", err)
 				return
@@ -126,7 +127,7 @@ func TestNullFloat_ImplementsUnmarshaler(t *testing.T) {
 	}()
 
 	// assert *NullFloat implements decode.Unmarshaler interface
-	var _ decode.Unmarshaler = (*NullFloat)(nil)
+	var _ decode.Unmarshaler = (*graphql.NullFloat)(nil)
 }
 
 func TestNullFloat_UnmarshalGraphQL(t *testing.T) {
@@ -135,7 +136,7 @@ func TestNullFloat_UnmarshalGraphQL(t *testing.T) {
 	}
 
 	good := float64(1234)
-	ref := NullFloat{
+	ref := graphql.NullFloat{
 		Value: &good,
 		Set:   true,
 	}
@@ -155,7 +156,7 @@ func TestNullFloat_UnmarshalGraphQL(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				gt := new(NullFloat)
+				gt := new(graphql.NullFloat)
 				if err := gt.UnmarshalGraphQL(tt.args.input); err != nil {
 					if err.Error() != tt.wantErr {
 						t.Errorf("UnmarshalGraphQL() error = %v, want = %s", err, tt.wantErr)
@@ -172,7 +173,7 @@ func TestNullFloat_UnmarshalGraphQL(t *testing.T) {
 	tests := []struct {
 		name   string
 		args   args
-		wantEq NullFloat
+		wantEq graphql.NullFloat
 	}{
 		{
 			name: "int",
@@ -199,7 +200,7 @@ func TestNullFloat_UnmarshalGraphQL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gt := new(NullFloat)
+			gt := new(graphql.NullFloat)
 			if err := gt.UnmarshalGraphQL(tt.args.input); err != nil {
 				t.Errorf("UnmarshalGraphQL() error = %v", err)
 				return

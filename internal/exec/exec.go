@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -157,17 +156,6 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 // to handle JS limitation of int64, we create duplicate of this fields as string
 // currently limited to these fields only as per Toko-TTS requirement
 var (
-	targetFields = map[string]bool{
-		"id":          true,
-		"product_id":  true,
-		"productid":   true,
-		"product_ids": true,
-		"productids":  true,
-		"shop_id":     true,
-		"shopid":      true,
-		"shop_ids":    true,
-		"shopids":     true,
-	}
 	singularInt64Maps = map[string]bool{
 		"Int":           true,
 		"Int!":          true,
@@ -194,9 +182,7 @@ var (
 
 func isNeedStrCounterpart(field *selected.SchemaField) (needStrCounterpart, isArray bool) {
 	defType := field.FieldDefinition.Type.String()
-	fieldName := strings.ToLower(field.Alias)
-	isTargetField, ok := targetFields[fieldName]
-	if ok && isTargetField {
+	if field.NeedStrCounterpart {
 		// is it single object?
 		isTargetTypeSingular, ok := singularInt64Maps[defType]
 		if ok && isTargetTypeSingular {
@@ -212,6 +198,7 @@ func isNeedStrCounterpart(field *selected.SchemaField) (needStrCounterpart, isAr
 			return
 		}
 	}
+
 	return
 }
 
