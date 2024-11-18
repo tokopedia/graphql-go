@@ -54,6 +54,7 @@ type SchemaField struct {
 	Async              bool
 	FixedResult        reflect.Value
 	NeedStrCounterpart bool
+	CounterpartAlias   string
 }
 
 type TypeAssertion struct {
@@ -160,6 +161,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					Sels:               fieldSels,
 					Async:              fe.HasContext || fe.ArgsPacker != nil || fe.HasError || HasAsyncSel(fieldSels),
 					NeedStrCounterpart: field.NeedStrCounterpart,
+					CounterpartAlias:   field.CounterpartAlias,
 				})
 			}
 
