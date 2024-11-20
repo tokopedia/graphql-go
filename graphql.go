@@ -267,8 +267,6 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 
 	// check for auto int 64 duplication
-	check := variables[types.DUPLICATION_FLAG]
-	enabled, ok := check.(bool)
 	r := &exec.Request{
 		Request: selected.Request{
 			Doc:                  doc,
@@ -276,11 +274,10 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 			Schema:               s.schema,
 			DisableIntrospection: s.disableIntrospection,
 		},
-		Limiter:                make(chan struct{}, s.maxParallelism),
-		Tracer:                 s.tracer,
-		Logger:                 s.logger,
-		PanicHandler:           s.panicHandler,
-		EnableInt64Duplication: ok && enabled,
+		Limiter:      make(chan struct{}, s.maxParallelism),
+		Tracer:       s.tracer,
+		Logger:       s.logger,
+		PanicHandler: s.panicHandler,
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {
