@@ -99,7 +99,6 @@ func parseFragment(l *common.Lexer) *types.FragmentDefinition {
 func parseSelectionSet(l *common.Lexer) []types.Selection {
 	var sels []types.Selection
 	originalFields := make(map[string]*types.Field, 0)
-	needDuplicateFields := make(map[string]string, 0)
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
 		f := parseSelection(l)
@@ -110,20 +109,20 @@ func parseSelectionSet(l *common.Lexer) []types.Selection {
 				originalFields[sel.Name.Name] = sel
 			} else {
 				origFieldName := strings.ReplaceAll(sel.Name.Name, types.DUPLICATION_SUFFIX, "")
-				needDuplicateFields[origFieldName] = sel.Alias.Name
+				// we instantly check map, so original field MUST BE BEFORE duplicate field in request
+				origField, ok := originalFields[origFieldName]
+				if ok {
+					origField.NeedStrCounterpart = true
+					origField.CounterpartAlias = sel.Alias.Name
+				} else { // no original field, we append to schema so it will respons with invalid schema
+					sels = append(sels, f)
+				}
 			}
 		default:
 			sels = append(sels, f)
 		}
 	}
 	l.ConsumeToken('}')
-	for fieldName, aliasName := range needDuplicateFields {
-		f, ok := originalFields[fieldName]
-		if ok {
-			f.NeedStrCounterpart = true
-			f.CounterpartAlias = aliasName
-		}
-	}
 	return sels
 }
 
