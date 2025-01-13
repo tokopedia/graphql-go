@@ -853,6 +853,9 @@ func validateBasicLit(v *types.PrimitiveValue, t types.Type) bool {
 	case *types.ScalarTypeDefinition:
 		switch t.Name {
 		case "Int":
+			if v.Type == scanner.String {
+				return validateBuiltInScalar(v.Text, "String")
+			}
 			if v.Type != scanner.Int {
 				return false
 			}
@@ -888,6 +891,10 @@ func validateBasicLit(v *types.PrimitiveValue, t types.Type) bool {
 func validateBuiltInScalar(v string, n string) bool {
 	switch n {
 	case "Int":
+		_, err := strconv.ParseInt(v, 10, 64)
+		if err == nil {
+			return true
+		}
 		f, err := strconv.ParseFloat(v, 64)
 		if err != nil {
 			return false
